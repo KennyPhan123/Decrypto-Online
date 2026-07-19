@@ -785,6 +785,11 @@ function attachGuessHandlers() {
       dialog.style.maxWidth = '350px';
       dialog.style.background = 'var(--surface)';
       dialog.style.color = 'var(--text)';
+      dialog.style.position = 'fixed';
+      dialog.style.top = '50%';
+      dialog.style.left = '50%';
+      dialog.style.transform = 'translate(-50%, -50%)';
+      dialog.style.margin = '0';
       
       dialog.innerHTML = `
         <h3 style="margin-top:0; margin-bottom:16px; color:${KW_COLORS[num-1]}">Lịch sử Từ khóa #${num}</h3>
