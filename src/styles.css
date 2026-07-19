@@ -921,7 +921,7 @@ body {
 .history-table td {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border-light);
-  color: var(--text);
+  color: inherit;
 }
 
 .history-table .kw-col-header {
