@@ -357,6 +357,13 @@ body {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
   overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--transition), transform var(--transition);
+}
+
+.team-column:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
 }
 
 .team-header {

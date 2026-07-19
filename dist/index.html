@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <script type="module" crossorigin src="/assets/index-DlBRUxB8.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-pXDAztg5.css">
+  <script type="module" crossorigin src="/assets/index-DGiJ2I5M.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-ATLI57P-.css">
 </head>
 <body>
 
@@ -21,20 +21,32 @@
         <p class="subtitle">Giải mã. Chặn mã. Chiến thắng.</p>
       </div>
 
-      <div class="home-form">
-        <div class="input-group">
-          <label for="player-name">Tên của bạn</label>
-          <input type="text" id="player-name" placeholder="Nhập tên..." maxlength="20" autocomplete="off" />
-        </div>
-        
-        <div class="input-group">
-          <label for="room-code-input">Mã phòng (để trống nếu tạo mới)</label>
-          <input type="text" id="room-code-input" placeholder="Nhập mã phòng..." maxlength="4" autocomplete="off" style="text-transform:uppercase" />
-        </div>
-
-        <button id="btn-join" class="btn btn-primary" style="margin-top: 8px;">Vào phòng</button>
+      <div class="home-form" id="menu-main">
+        <button id="btn-menu-create" class="btn btn-secondary">Tạo phòng mới</button>
         <div class="divider"><span>hoặc</span></div>
-        <button id="btn-create" class="btn btn-secondary">Tạo phòng mới</button>
+        <button id="btn-menu-join" class="btn btn-primary">Vào phòng</button>
+      </div>
+
+      <div class="home-form" id="menu-create" style="display:none">
+        <div class="input-group">
+          <label for="create-name">Tên của bạn</label>
+          <input type="text" id="create-name" placeholder="Nhập tên..." maxlength="20" autocomplete="off" />
+        </div>
+        <button id="btn-create" class="btn btn-primary" style="margin-top: 8px;">Xác nhận tạo</button>
+        <button id="btn-back-create" class="btn btn-secondary btn-small" style="margin-top: 8px;">Quay lại</button>
+      </div>
+
+      <div class="home-form" id="menu-join" style="display:none">
+        <div class="input-group">
+          <label for="join-name">Tên của bạn</label>
+          <input type="text" id="join-name" placeholder="Nhập tên..." maxlength="20" autocomplete="off" />
+        </div>
+        <div class="input-group">
+          <label for="join-code">Mã phòng</label>
+          <input type="text" id="join-code" placeholder="Nhập mã phòng..." maxlength="4" autocomplete="off" style="text-transform:uppercase" />
+        </div>
+        <button id="btn-join" class="btn btn-primary" style="margin-top: 8px;">Xác nhận vào</button>
+        <button id="btn-back-join" class="btn btn-secondary btn-small" style="margin-top: 8px;">Quay lại</button>
       </div>
     </div>
   </div>
@@ -57,17 +69,15 @@
       <div id="lobby-mode-info" class="mode-info"></div>
 
       <div id="lobby-teams" class="lobby-teams">
-        <div class="team-column">
-          <h3 class="team-header team-a-header">Đội Trắng</h3>
+        <div class="team-column" id="team-a-col">
+          <h3 class="team-header team-a-header" id="team-a-title">Đội Trắng</h3>
           <ul id="team-a-list" class="team-list"></ul>
         </div>
-        <div class="team-column">
-          <h3 class="team-header team-b-header">Đội Đen</h3>
+        <div class="team-column" id="team-b-col">
+          <h3 class="team-header team-b-header" id="team-b-title">Đội Đen</h3>
           <ul id="team-b-list" class="team-list"></ul>
         </div>
       </div>
-      
-      <button id="btn-switch-team" class="btn btn-secondary btn-small" style="margin-bottom: 16px;">Đổi phe</button>
 
       <button id="btn-start" class="btn btn-primary" style="display:none">Bắt đầu</button>
       <p id="lobby-waiting" class="waiting-text">Đang chờ chủ phòng bắt đầu...</p>

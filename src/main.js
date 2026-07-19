@@ -60,10 +60,32 @@ function send(data) {
   }
 }
 
-// ── Home Screen ─────────────────────────────────────────────
+// ── Home Screen Sub-menus ───────────────────────────────────
+
+function showHomeMenu(menuId) {
+  $('menu-main').style.display = 'none';
+  $('menu-create').style.display = 'none';
+  $('menu-join').style.display = 'none';
+  $(menuId).style.display = 'flex';
+}
+
+$('btn-menu-create').addEventListener('click', () => {
+  showHomeMenu('menu-create');
+  $('create-name').focus();
+});
+
+$('btn-menu-join').addEventListener('click', () => {
+  showHomeMenu('menu-join');
+  $('join-name').focus();
+});
+
+$('btn-back-create').addEventListener('click', () => showHomeMenu('menu-main'));
+$('btn-back-join').addEventListener('click', () => showHomeMenu('menu-main'));
+
+// ── Room Actions ────────────────────────────────────────────
 
 $('btn-create').addEventListener('click', () => {
-  const name = $('player-name').value.trim();
+  const name = $('create-name').value.trim();
   if (!name) { showToast('Vui lòng nhập tên'); return; }
   const code = generateCode();
   connect(code, name);
@@ -71,26 +93,27 @@ $('btn-create').addEventListener('click', () => {
 });
 
 $('btn-join').addEventListener('click', () => {
-  const name = $('player-name').value.trim();
-  const code = $('room-code-input').value.trim().toUpperCase();
+  const name = $('join-name').value.trim();
+  const code = $('join-code').value.trim().toUpperCase();
   if (!name) { showToast('Vui lòng nhập tên'); return; }
   if (!code || code.length < 4) { showToast('Vui lòng nhập mã phòng'); return; }
   connect(code, name);
   showScreen('lobby-screen');
 });
 
-$('player-name').addEventListener('keydown', e => {
+$('create-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('btn-create').click();
+});
+
+$('join-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') {
-    if ($('room-code-input').value.trim()) $('btn-join').click();
-    else $('room-code-input').focus();
+    if ($('join-code').value.trim()) $('btn-join').click();
+    else $('join-code').focus();
   }
 });
 
-$('room-code-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    if ($('room-code-input').value.trim()) $('btn-join').click();
-    else $('btn-create').click();
-  }
+$('join-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('btn-join').click();
 });
 
 function generateCode() {
@@ -123,7 +146,8 @@ $('btn-copy-code').addEventListener('click', () => {
 
 $('btn-start').addEventListener('click', () => send({ type: 'start' }));
 
-$('btn-switch-team').addEventListener('click', () => send({ type: 'switch-team' }));
+$('team-a-col').addEventListener('click', () => send({ type: 'switch-team', target: 'A' }));
+$('team-b-col').addEventListener('click', () => send({ type: 'switch-team', target: 'B' }));
 
 // ── History Toggle ──────────────────────────────────────────
 
@@ -139,6 +163,7 @@ $('btn-back-home').addEventListener('click', () => {
   if (socket) socket.close();
   socket = null;
   state = null;
+  showHomeMenu('menu-main');
   showScreen('home-screen');
 });
 
@@ -197,13 +222,19 @@ function renderLobby() {
   const isHost = s.players.find(p => p.id === s.myId)?.isHost;
   const count = s.players.length;
 
-  // Mode info
+  // Mode info & Team headers
   if (count < 3) {
     $('lobby-mode-info').textContent = `${count} người chơi — Cần ít nhất 3 người`;
+    $('team-a-title').textContent = 'Đội A';
+    $('team-b-title').textContent = 'Đội B';
   } else if (count === 3) {
-    $('lobby-mode-info').textContent = `3 người chơi — Chế độ độc lập (Interceptor)`;
+    $('lobby-mode-info').textContent = `3 người chơi — Chế độ độc lập`;
+    $('team-a-title').textContent = 'Đội Mã Hóa (Cần 2)';
+    $('team-b-title').textContent = 'Kẻ Chặn Mã (Cần 1)';
   } else {
     $('lobby-mode-info').textContent = `${count} người chơi — Chế độ đội`;
+    $('team-a-title').textContent = 'Đội A';
+    $('team-b-title').textContent = 'Đội B';
   }
 
   // Lobby Teams (pre-game)

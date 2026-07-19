@@ -64,7 +64,7 @@ export default class DecryptoServer {
 
     switch (data.type) {
       case 'join': this.handleJoin(sender, data); break;
-      case 'switch-team': this.handleSwitchTeam(sender); break;
+      case 'switch-team': this.handleSwitchTeam(sender, data); break;
       case 'start': this.handleStart(sender); break;
       case 'submit-clues': this.handleSubmitClues(sender, data); break;
       case 'submit-guess': this.handleSubmitGuess(sender, data); break;
@@ -117,21 +117,13 @@ export default class DecryptoServer {
     this.broadcastState();
   }
 
-  handleSwitchTeam(sender) {
+  handleSwitchTeam(sender, data) {
     if (this.game) return;
     const player = this.players.find(p => p.id === sender.id);
     if (!player) return;
 
-    const total = this.players.length;
-    const maxPerTeam = Math.ceil(total / 2);
-    
-    const targetTeam = player.team === 'A' ? 'B' : 'A';
-    const targetCount = this.players.filter(p => p.team === targetTeam).length;
-    
-    if (targetCount >= maxPerTeam && total >= 3) {
-      this.sendError(sender, 'Đội này đã đầy! Phải duy trì sự cân bằng.');
-      return;
-    }
+    const targetTeam = data.target || (player.team === 'A' ? 'B' : 'A');
+    if (targetTeam !== 'A' && targetTeam !== 'B') return;
     
     player.team = targetTeam;
     this.broadcastState();
@@ -145,6 +137,21 @@ export default class DecryptoServer {
     if (count < 3) {
       this.sendError(sender, 'Cần ít nhất 3 người chơi.');
       return;
+    }
+
+    const countA = this.players.filter(p => p.team === 'A').length;
+    const countB = this.players.filter(p => p.team === 'B').length;
+
+    if (count === 3) {
+      if (countA !== 2 || countB !== 1) {
+        this.broadcastError('Để bắt đầu chế độ 3 người, Đội Mã Hóa phải có đúng 2 người và Kẻ Chặn Mã phải có 1 người.');
+        return;
+      }
+    } else {
+      if (Math.abs(countA - countB) > 1) {
+        this.broadcastError('Đội hình chưa cân bằng! Vui lòng chia lại sao cho số lượng 2 đội chênh lệch không quá 1 người.');
+        return;
+      }
     }
 
     const mode = count === 3 ? '3p' : 'team';
@@ -545,6 +552,12 @@ export default class DecryptoServer {
 
   sendError(connection, message) {
     connection.send(JSON.stringify({ type: 'error', message }));
+  }
+
+  broadcastError(message) {
+    for (const conn of this.room.getConnections()) {
+      conn.send(JSON.stringify({ type: 'error', message }));
+    }
   }
 
   broadcastState() {
