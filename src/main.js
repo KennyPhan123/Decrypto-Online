@@ -438,6 +438,22 @@ function renderEncryptPhase(area) {
 
     // Auto-focus first input
     setTimeout(() => $('clue-0')?.focus(), 100);
+
+    // Enter key navigation
+    [0, 1, 2].forEach(i => {
+      const input = $(`clue-${i}`);
+      if (!input) return;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (i < 2) {
+            $(`clue-${i + 1}`)?.focus();
+          } else {
+            $('btn-submit-clues')?.click();
+          }
+        }
+      });
+    });
   } else {
     // Waiting for encryptor(s)
     let waitText = '';
@@ -574,7 +590,6 @@ function renderGuessForm(guessType, title, clues, keywords) {
           ${[0, 1, 2].map(i => `
             <div class="wire-item">
               <div class="wire-box left-node" data-clue="${i}">
-                <span class="clue-number" style="background:var(--text-muted); width:20px; height:20px; font-size:11px">${['A', 'B', 'C'][i]}</span>
                 <span>${esc(clues[i])}</span>
               </div>
             </div>
