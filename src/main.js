@@ -800,6 +800,9 @@ function attachGuessHandlers() {
       document.body.appendChild(dialog);
       dialog.showModal();
       dialog.addEventListener('close', () => dialog.remove());
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog.close();
+      });
     });
   });
 
