@@ -568,25 +568,32 @@ function renderGuessForm(guessType, title, clues, keywords) {
   return `
     <div class="guess-section fade-in">
       <div class="guess-section-title">${title}</div>
-      <div class="guess-connection-container">
-        ${[0, 1, 2].map(i => `
-          <div class="guess-connection-row" id="guess-row-${i}" data-clue-index="${i}">
-            <div class="guess-clue-box">
-              <div class="clue-number" style="background:var(--text-muted)">${['A', 'B', 'C'][i]}</div>
-              <span>${esc(clues[i])}</span>
+      <div class="wire-task-container" id="wire-task">
+        <svg class="wire-svg" id="wire-svg"></svg>
+        <div class="wire-col left-col">
+          ${[0, 1, 2].map(i => `
+            <div class="wire-item">
+              <div class="wire-box">
+                <span class="clue-number" style="background:var(--text-muted); width:20px; height:20px; font-size:11px">${['A', 'B', 'C'][i]}</span>
+                <span>${esc(clues[i])}</span>
+              </div>
+              <div class="wire-node left-node" data-clue="${i}"></div>
             </div>
-            <div class="guess-options">
-              ${[1, 2, 3, 4].map(num => `
-                <button class="guess-opt" data-val="${num}">
-                  <span class="kw-number" style="background:${KW_COLORS[num-1]}">${num}</span>
-                  ${keywords ? `<span>${esc(keywords[num-1])}</span>` : ''}
-                </button>
-              `).join('')}
+          `).join('')}
+        </div>
+        <div class="wire-col right-col">
+          ${[1, 2, 3, 4].map(num => `
+            <div class="wire-item">
+              <div class="wire-box" style="border-color:${KW_COLORS[num-1]}">
+                <span class="kw-number" style="background:${KW_COLORS[num-1]}; width:20px; height:20px; font-size:11px">${num}</span>
+                ${keywords ? `<span>${esc(keywords[num-1])}</span>` : ''}
+              </div>
+              <div class="wire-node right-node" data-val="${num}" style="color:${KW_COLORS[num-1]}"></div>
             </div>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       </div>
-      <button class="btn btn-primary" id="btn-submit-guess" data-type="${guessType}" disabled>Gửi</button>
+      <button class="btn btn-primary" id="btn-submit-guess" data-type="${guessType}" disabled style="width:100%">Gửi</button>
     </div>
   `;
 }
@@ -595,33 +602,131 @@ function attachGuessHandlers() {
   const btn = $('btn-submit-guess');
   if (!btn) return;
 
-  const rows = [0, 1, 2].map(i => $(`guess-row-${i}`));
-  const selections = { 0: null, 1: null, 2: null };
+  const container = $('wire-task');
+  const svg = $('wire-svg');
+  if (!container || !svg) return;
 
-  rows.forEach((row, rowIndex) => {
-    if (!row) return;
-    const opts = row.querySelectorAll('.guess-opt');
-    opts.forEach(opt => {
-      opt.addEventListener('click', () => {
-        // Clear all in this row
-        opts.forEach(o => o.classList.remove('selected', 'kw-1', 'kw-2', 'kw-3', 'kw-4'));
-        
-        const val = parseInt(opt.dataset.val);
-        selections[rowIndex] = val;
-        
-        opt.classList.add('selected', `kw-${val}`);
-        
-        // Enable submit if all 3 are selected
-        if (selections[0] && selections[1] && selections[2]) {
-          btn.disabled = false;
+  const leftNodes = document.querySelectorAll('.left-node');
+  const rightNodes = document.querySelectorAll('.right-node');
+  
+  const connections = { 0: null, 1: null, 2: null };
+  let activeStartNode = null;
+  let activeLine = null;
+
+  function updateLines() {
+    svg.innerHTML = '';
+    const cRect = container.getBoundingClientRect();
+    
+    // Draw active line
+    if (activeLine) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', activeLine.x1);
+      line.setAttribute('y1', activeLine.y1);
+      line.setAttribute('x2', activeLine.x2);
+      line.setAttribute('y2', activeLine.y2);
+      line.setAttribute('stroke', 'var(--text-muted)');
+      line.setAttribute('stroke-width', '4');
+      line.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(line);
+    }
+
+    // Draw connected lines
+    for (let i = 0; i < 3; i++) {
+      const num = connections[i];
+      const lNode = leftNodes[i];
+      if (num) {
+        const rNode = Array.from(rightNodes).find(n => parseInt(n.dataset.val) === num);
+        if (lNode && rNode) {
+          const lRect = lNode.getBoundingClientRect();
+          const rRect = rNode.getBoundingClientRect();
+          
+          const x1 = lRect.left + lRect.width/2 - cRect.left;
+          const y1 = lRect.top + lRect.height/2 - cRect.top;
+          const x2 = rRect.left + rRect.width/2 - cRect.left;
+          const y2 = rRect.top + rRect.height/2 - cRect.top;
+          
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x1);
+          line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2);
+          line.setAttribute('y2', y2);
+          line.setAttribute('stroke', rNode.style.color);
+          line.setAttribute('stroke-width', '6');
+          line.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(line);
+          
+          lNode.classList.add('connected');
+          lNode.style.color = rNode.style.color;
         }
-      });
-    });
+      } else {
+        lNode.classList.remove('connected');
+        lNode.style.color = '';
+      }
+    }
+    
+    btn.disabled = !(connections[0] && connections[1] && connections[2]);
+  }
+
+  container.addEventListener('pointerdown', e => {
+    const node = e.target.closest('.left-node');
+    if (!node) return;
+    
+    const clueIdx = parseInt(node.dataset.clue);
+    connections[clueIdx] = null; // disconnect
+    
+    activeStartNode = node;
+    const cRect = container.getBoundingClientRect();
+    const nRect = node.getBoundingClientRect();
+    
+    activeLine = {
+      x1: nRect.left + nRect.width/2 - cRect.left,
+      y1: nRect.top + nRect.height/2 - cRect.top,
+      x2: e.clientX - cRect.left,
+      y2: e.clientY - cRect.top
+    };
+    
+    updateLines();
+    container.setPointerCapture(e.pointerId);
   });
 
+  container.addEventListener('pointermove', e => {
+    if (!activeStartNode) return;
+    const cRect = container.getBoundingClientRect();
+    activeLine.x2 = e.clientX - cRect.left;
+    activeLine.y2 = e.clientY - cRect.top;
+    updateLines();
+  });
+
+  container.addEventListener('pointerup', e => {
+    if (!activeStartNode) return;
+    container.releasePointerCapture(e.pointerId);
+    
+    const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+    const rightNode = dropTarget?.closest('.right-node') || dropTarget?.closest('.wire-item')?.querySelector('.right-node');
+    
+    if (rightNode) {
+      const clueIdx = parseInt(activeStartNode.dataset.clue);
+      const val = parseInt(rightNode.dataset.val);
+      
+      // Disconnect other wires connected to this target
+      for (let k in connections) {
+        if (connections[k] === val) connections[k] = null;
+      }
+      
+      connections[clueIdx] = val;
+    }
+    
+    activeStartNode = null;
+    activeLine = null;
+    updateLines();
+  });
+
+  window.addEventListener('resize', updateLines);
+  setTimeout(updateLines, 50);
+
   btn.addEventListener('click', () => {
-    if (!selections[0] || !selections[1] || !selections[2]) return;
-    const guess = [selections[0], selections[1], selections[2]];
+    if (!connections[0] || !connections[1] || !connections[2]) return;
+    const guess = [connections[0], connections[1], connections[2]];
     const guessType = btn.dataset.type;
 
     send({ type: 'submit-guess', guess, guessType });
@@ -643,22 +748,28 @@ function renderRevealPhase(area) {
   // Correct code
   html += `
     <div class="reveal-section fade-in">
-      <div class="reveal-title">Mã số đúng</div>
-      <div class="reveal-code-row" style="flex-direction: column; gap: 8px;">
+      <div class="reveal-title">Từ khóa đúng</div>
+      <div class="reveal-code-row">
         ${s.revealCode.map((d, i) => `
-          <div style="display: flex; align-items: center; gap: 12px; background: var(--surface-alt); padding: 8px 16px; border-radius: 8px; width: 100%; max-width: 300px; margin: 0 auto;">
+          <div class="reveal-code-item">
             <div class="code-digit" style="background:${KW_COLORS[d - 1]}">${d}</div>
-            <div style="color:${KW_COLORS[d - 1]}; font-weight: 600; font-size: 1.1rem">${esc(currentClues[i])}</div>
+            <div class="reveal-guess-arrow">←</div>
+            <div style="font-weight: 600; font-size: 1.1rem; color: var(--text)">${esc(currentClues[i])}</div>
           </div>
         `).join('')}
       </div>
   `;
 
-  const renderGuessDigits = (guessArr) => {
+  const renderGuessComparison = (guessArr) => {
     return guessArr.map((g, i) => {
       const isMatch = g === s.revealCode[i];
-      const color = isMatch ? 'var(--success)' : 'var(--error)';
-      return `<div class="code-digit" style="background:${color}; transform: scale(0.8)">${g}</div>`;
+      const icon = isMatch ? '<span class="reveal-icon-correct">✅</span>' : '<span class="reveal-icon-wrong">❌</span>';
+      return `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="code-digit" style="background:${KW_COLORS[g - 1]}; transform: scale(0.8)">${g}</div>
+          ${icon}
+        </div>
+      `;
     }).join('');
   };
 
@@ -669,7 +780,7 @@ function renderRevealPhase(area) {
     html += `
       <div class="reveal-result ${cls}">
         <span class="result-label">${label}</span>
-        <div style="display:flex; gap:4px; justify-content:center; margin-top:8px;">${renderGuessDigits(s.decryptGuess)}</div>
+        <div style="display:flex; gap:12px;">${renderGuessComparison(s.decryptGuess)}</div>
       </div>
     `;
   }
@@ -681,7 +792,7 @@ function renderRevealPhase(area) {
     html += `
       <div class="reveal-result ${cls}">
         <span class="result-label">${label}</span>
-        <div style="display:flex; gap:4px; justify-content:center; margin-top:8px;">${renderGuessDigits(s.interceptGuess)}</div>
+        <div style="display:flex; gap:12px;">${renderGuessComparison(s.interceptGuess)}</div>
       </div>
     `;
   } else if (s.round < 2 || (s.needIntercept === false)) {

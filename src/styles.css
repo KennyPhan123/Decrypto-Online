@@ -721,78 +721,91 @@ body {
   color: var(--text);
 }
 
-.guess-connection-container {
+/* Wire Connection Task (Among Us style) */
+.wire-task-container {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.guess-connection-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 24px 16px;
   background: var(--surface-alt);
-  padding: 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-light);
+  touch-action: none;
+  user-select: none;
+  margin-bottom: 16px;
 }
 
-.guess-clue-box {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
+.wire-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wire-col {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.guess-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.guess-opt {
+  flex-direction: column;
+  gap: 32px;
+  z-index: 2;
   flex: 1;
-  min-width: 48px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  border: 2px solid var(--border);
+}
+
+.wire-col.right-col {
+  align-items: flex-end;
+}
+
+.wire-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wire-col.right-col .wire-item {
+  flex-direction: row-reverse;
+}
+
+.wire-box {
   background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 2px solid var(--border-light);
   font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.guess-opt:hover {
-  border-color: var(--border-dark, #ccc);
-}
-
-.guess-opt.selected {
-  border-color: var(--opt-color);
-  background: var(--opt-bg);
+  font-size: 14px;
   color: var(--text);
-}
-
-.guess-opt .kw-number {
-  font-size: 12px;
-  font-weight: 700;
-  width: 20px;
-  height: 20px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+  max-width: 140px;
+}
+
+.wire-node {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  color: white;
+  background: var(--border);
+  border: 4px solid var(--surface-alt);
+  box-shadow: 0 0 0 2px var(--border);
+  cursor: grab;
   flex-shrink: 0;
+  transition: transform 0.1s;
+}
+
+.wire-node:active {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+.wire-node.connected {
+  background: currentColor;
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.wire-node.right-node {
+  cursor: default;
 }
 
 .guess-submitted {
@@ -821,23 +834,48 @@ body {
 
 .reveal-code-row {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.reveal-code-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-alt);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+}
+
+.reveal-guess-arrow {
+  color: var(--text-muted);
+  font-size: 16px;
+  margin: 0 10px;
 }
 
 .reveal-result {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 12px 16px;
+  background: var(--surface-alt);
   border-radius: var(--radius);
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-top: 10px;
+  font-weight: 600;
 }
 
-.reveal-result:last-child {
-  margin-bottom: 0;
+.reveal-icon-correct {
+  color: var(--success);
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.reveal-icon-wrong {
+  color: var(--error);
+  font-size: 20px;
+  font-weight: bold;
 }
 
 .result-correct {
