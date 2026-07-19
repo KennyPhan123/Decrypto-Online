@@ -573,22 +573,20 @@ function renderGuessForm(guessType, title, clues, keywords) {
         <div class="wire-col left-col">
           ${[0, 1, 2].map(i => `
             <div class="wire-item">
-              <div class="wire-box">
+              <div class="wire-box left-node" data-clue="${i}">
                 <span class="clue-number" style="background:var(--text-muted); width:20px; height:20px; font-size:11px">${['A', 'B', 'C'][i]}</span>
                 <span>${esc(clues[i])}</span>
               </div>
-              <div class="wire-node left-node" data-clue="${i}"></div>
             </div>
           `).join('')}
         </div>
         <div class="wire-col right-col">
           ${[1, 2, 3, 4].map(num => `
             <div class="wire-item">
-              <div class="wire-box" style="border-color:${KW_COLORS[num-1]}">
-                <span class="kw-number" style="background:${KW_COLORS[num-1]}; width:20px; height:20px; font-size:11px">${num}</span>
-                ${keywords ? `<span>${esc(keywords[num-1])}</span>` : ''}
+              <div class="wire-box right-node" data-val="${num}" style="border-color:${KW_COLORS[num-1]}; color:${KW_COLORS[num-1]}">
+                <span class="kw-number" style="background:${KW_COLORS[num-1]}">${num}</span>
+                ${keywords ? `<span style="color:var(--text)">${esc(keywords[num-1])}</span>` : ''}
               </div>
-              <div class="wire-node right-node" data-val="${num}" style="color:${KW_COLORS[num-1]}"></div>
             </div>
           `).join('')}
         </div>
@@ -630,6 +628,8 @@ function attachGuessHandlers() {
       svg.appendChild(line);
     }
 
+    const KW_BG = ['var(--kw-1-bg)', 'var(--kw-2-bg)', 'var(--kw-3-bg)', 'var(--kw-4-bg)'];
+
     // Draw connected lines
     rightNodes.forEach(rn => {
       rn.classList.remove('connected');
@@ -645,30 +645,35 @@ function attachGuessHandlers() {
           const lRect = lNode.getBoundingClientRect();
           const rRect = rNode.getBoundingClientRect();
           
-          const x1 = lRect.left + lRect.width/2 - cRect.left;
-          const y1 = lRect.top + lRect.height/2 - cRect.top;
-          const x2 = rRect.left + rRect.width/2 - cRect.left;
-          const y2 = rRect.top + rRect.height/2 - cRect.top;
+          let lX, lY, rX, rY;
+          // Connect from right edge of left box to left edge of right box
+          lX = lRect.right - cRect.left;
+          lY = lRect.top + lRect.height/2 - cRect.top;
+          
+          rX = rRect.left - cRect.left;
+          rY = rRect.top + rRect.height/2 - cRect.top;
           
           const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', x1);
-          line.setAttribute('y1', y1);
-          line.setAttribute('x2', x2);
-          line.setAttribute('y2', y2);
+          line.setAttribute('x1', lX);
+          line.setAttribute('y1', lY);
+          line.setAttribute('x2', rX);
+          line.setAttribute('y2', rY);
           line.setAttribute('stroke', rNode.style.color);
           line.setAttribute('stroke-width', '6');
           line.setAttribute('stroke-linecap', 'round');
           svg.appendChild(line);
           
           lNode.classList.add('connected');
-          lNode.style.color = rNode.style.color;
+          lNode.style.borderColor = rNode.style.color;
+          lNode.style.backgroundColor = KW_BG[num-1];
 
           rNode.classList.add('connected');
-          rNode.style.backgroundColor = rNode.style.color;
+          rNode.style.backgroundColor = KW_BG[num-1];
         }
       } else {
         lNode.classList.remove('connected');
-        lNode.style.color = '';
+        lNode.style.borderColor = '';
+        lNode.style.backgroundColor = '';
       }
     }
     
@@ -687,7 +692,7 @@ function attachGuessHandlers() {
     const nRect = node.getBoundingClientRect();
     
     activeLine = {
-      x1: nRect.left + nRect.width/2 - cRect.left,
+      x1: nRect.right - cRect.left,
       y1: nRect.top + nRect.height/2 - cRect.top,
       x2: e.clientX - cRect.left,
       y2: e.clientY - cRect.top
@@ -760,9 +765,9 @@ function renderRevealPhase(area) {
       <div class="reveal-code-row">
         ${s.revealCode.map((d, i) => `
           <div class="reveal-code-item">
-            <div class="code-digit" style="background:${KW_COLORS[d - 1]}">${d}</div>
-            <div class="reveal-guess-arrow">←</div>
             <div style="font-weight: 600; font-size: 1.1rem; color: var(--text)">${esc(currentClues[i])}</div>
+            <div class="reveal-guess-arrow">→</div>
+            <div class="code-digit" style="background:${KW_COLORS[d - 1]}">${d}</div>
           </div>
         `).join('')}
       </div>
