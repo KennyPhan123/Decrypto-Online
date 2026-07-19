@@ -407,8 +407,7 @@ function renderEncryptPhase(area) {
       <div class="clue-inputs fade-in">
         ${s.code.map((d, i) => `
           <div class="clue-input-row">
-            <div class="clue-number" style="background:${KW_COLORS[d - 1]}">${['A', 'B', 'C'][i]}</div>
-            <input type="text" class="clue-input" id="clue-${i}" placeholder="Gợi ý cho từ khóa số ${d}..." autocomplete="off" />
+            <input type="text" class="clue-input" id="clue-${i}" placeholder="Gợi ý cho từ khóa số ${d}..." autocomplete="off" style="border: 2px solid ${KW_COLORS[d - 1]}; padding: 14px;" />
           </div>
         `).join('')}
       </div>
@@ -747,6 +746,56 @@ function attachGuessHandlers() {
     activeStartNode = null;
     activeLine = null;
     updateLines();
+  });
+
+  rightNodes.forEach(rn => {
+    rn.addEventListener('click', () => {
+      const num = parseInt(rn.dataset.val);
+      const s = state;
+      let hist = [];
+      
+      if (s.mode === '3p') {
+        hist = s.history || [];
+      } else {
+        const isMyTeamTurn = s.myTeam === s.currentTeamTurn;
+        hist = isMyTeamTurn ? s.myHistory || [] : s.opponentHistory || [];
+      }
+      
+      const clueHistory = [];
+      hist.forEach(entry => {
+        const idx = entry.code.indexOf(num);
+        if (idx !== -1) {
+          clueHistory.push({ round: entry.round, text: entry.clues[idx] });
+        }
+      });
+
+      if (clueHistory.length === 0) {
+        showToast(`Từ khóa #${num} chưa có lịch sử`);
+        return;
+      }
+
+      const html = clueHistory.map(c => `<div style="padding:8px 0; border-bottom:1px solid var(--border-light)">Vòng ${c.round}: <b style="font-size:1.1rem">${esc(c.text)}</b></div>`).join('');
+      
+      const dialog = document.createElement('dialog');
+      dialog.style.padding = '20px';
+      dialog.style.borderRadius = '12px';
+      dialog.style.border = 'none';
+      dialog.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+      dialog.style.width = '85%';
+      dialog.style.maxWidth = '350px';
+      dialog.style.background = 'var(--surface)';
+      dialog.style.color = 'var(--text)';
+      
+      dialog.innerHTML = `
+        <h3 style="margin-top:0; margin-bottom:16px; color:${KW_COLORS[num-1]}">Lịch sử Từ khóa #${num}</h3>
+        <div style="margin-bottom:20px">${html}</div>
+        <button class="btn btn-primary" style="width:100%" onclick="this.closest('dialog').close()">Đóng</button>
+      `;
+      
+      document.body.appendChild(dialog);
+      dialog.showModal();
+      dialog.addEventListener('close', () => dialog.remove());
+    });
   });
 
   window.addEventListener('resize', updateLines);
