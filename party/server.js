@@ -73,6 +73,8 @@ export class DecryptoServer extends Server {
       case 'submit-guess': this.handleSubmitGuess(sender, data); break;
       case 'chat-msg': this.handleChatMsg(sender, data); break;
       case 'wire-sync': this.handleWireSync(sender, data); break;
+      case 'update-connections': this.handleUpdateConnections(sender, data); break;
+      case 'toggle-ready': this.handleToggleReady(sender, data); break;
       case 'continue': this.handleContinue(sender); break;
       case 'play-again': this.handlePlayAgain(sender); break;
       default: break;
@@ -204,6 +206,10 @@ export class DecryptoServer extends Server {
       usedCodes: [],
       history: [],
       chat: [],
+      decryptConnections: [null, null, null],
+      decryptReady: [],
+      interceptConnections: [null, null, null],
+      interceptReady: [],
     };
 
     this.startRound3P();
@@ -220,6 +226,10 @@ export class DecryptoServer extends Server {
     g.interceptGuess = null;
     g.timerEnd = null;
     g.chat = [];
+    g.decryptConnections = [null, null, null];
+    g.decryptReady = [];
+    g.interceptConnections = [null, null, null];
+    g.interceptReady = [];
   }
 
   // ── Initialize team game ─────────────────────────────────
@@ -250,6 +260,10 @@ export class DecryptoServer extends Server {
           decryptGuess: null,
           interceptGuess: null,
           chat: [],
+          decryptConnections: [null, null, null],
+          decryptReady: [],
+          interceptConnections: [null, null, null],
+          interceptReady: [],
         },
         B: {
           playerIds: teamBIds,
@@ -263,6 +277,10 @@ export class DecryptoServer extends Server {
           decryptGuess: null,
           interceptGuess: null,
           chat: [],
+          decryptConnections: [null, null, null],
+          decryptReady: [],
+          interceptConnections: [null, null, null],
+          interceptReady: [],
         },
       },
 
@@ -289,6 +307,10 @@ export class DecryptoServer extends Server {
       team.decryptGuess = null;
       team.interceptGuess = null;
       team.chat = [];
+      team.decryptConnections = [null, null, null];
+      team.decryptReady = [];
+      team.interceptConnections = [null, null, null];
+      team.interceptReady = [];
     }
   }
 
@@ -415,10 +437,8 @@ export class DecryptoServer extends Server {
     if (!team && g.mode !== '3p') return;
 
     const msg = {
-      senderId: sender.id,
       senderName: this.players.find(p => p.id === sender.id)?.name || 'Unknown',
       text: data.text,
-      time: Date.now()
     };
 
     if (g.mode === '3p') {
@@ -435,32 +455,145 @@ export class DecryptoServer extends Server {
     if (!g) return;
 
     const team = this.getPlayerTeam(sender.id);
-    if (!team && g.mode !== '3p') return;
-
-    // Broadcast only to the same team members (excluding the sender)
-    const teamPlayerIds = g.mode === '3p' 
-      ? this.players.map(p => p.id)
-      : g.teams[team].playerIds;
-
-    const encryptorId = g.mode === '3p' 
-      ? g.encryptors[g.encryptorIndex]
-      : g.teams[team].playerIds[g.teams[team].encryptorIndex % g.teams[team].playerIds.length];
-
-    teamPlayerIds.forEach(id => {
-      if (id === sender.id) return; // Don't send back to sender
-      if (id === encryptorId) return; // Encryptor shouldn't see wire sync
-
-      const conn = this.getConnection(id);
-      if (conn) {
-        conn.send(JSON.stringify({
-          type: 'wire-sync-forward',
-          senderId: sender.id,
-          senderName: this.players.find(p => p.id === sender.id)?.name || 'Unknown',
-          syncData: data.syncData
-        }));
+    
+    for (const p of this.players) {
+      if (p.id === sender.id) continue; // Don't send back to sender
+      
+      const pTeam = this.getPlayerTeam(p.id);
+      
+      let shouldSend = false;
+      if (g.mode === '3p') {
+        const isSenderEncryptor = g.encryptors[g.encryptorIndex] === sender.id;
+        const isPEncryptor = g.encryptors[g.encryptorIndex] === p.id;
+        if (!isSenderEncryptor && !isPEncryptor) {
+          shouldSend = true;
+        }
+      } else {
+        if (team && team === pTeam) {
+          if (team === g.currentTeamTurn) {
+            const encId = g.teams[team].playerIds[g.teams[team].encryptorIndex % g.teams[team].playerIds.length];
+            if (p.id !== encId) {
+              shouldSend = true;
+            }
+          } else {
+            shouldSend = true;
+          }
+        }
       }
-    });
+
+      if (shouldSend) {
+        const conn = this.getConnection(p.id);
+        if (conn) {
+          conn.send(JSON.stringify({
+            type: 'wire-sync-forward',
+            senderId: sender.id,
+            senderName: this.players.find(pl => pl.id === sender.id)?.name || 'Unknown',
+            syncData: data.syncData
+          }));
+        }
+      }
+    }
   }
+
+  handleUpdateConnections(sender, data) {
+    const g = this.game;
+    if (!g) return;
+    
+    const guessType = data.guessType; // 'decrypt' or 'intercept'
+    
+    if (g.mode === '3p') {
+      if (guessType === 'decrypt') {
+        g.decryptConnections = data.connections;
+        g.decryptReady = [];
+      } else if (guessType === 'intercept') {
+        g.interceptConnections = data.connections;
+        g.interceptReady = [];
+      }
+    } else {
+      const turnTeam = g.currentTeamTurn;
+      if (!turnTeam) return;
+      const opponentTeam = turnTeam === 'A' ? 'B' : 'A';
+      const playerTeam = this.getPlayerTeam(sender.id);
+      
+      if (guessType === 'decrypt' && playerTeam === turnTeam) {
+        g.teams[turnTeam].decryptConnections = data.connections;
+        g.teams[turnTeam].decryptReady = [];
+      } else if (guessType === 'intercept' && playerTeam === opponentTeam) {
+        g.teams[opponentTeam].interceptConnections = data.connections;
+        g.teams[opponentTeam].interceptReady = [];
+      }
+    }
+    
+    this.broadcastState();
+  }
+
+  handleToggleReady(sender, data) {
+    const g = this.game;
+    if (!g) return;
+    
+    const guessType = data.guessType; // 'decrypt' or 'intercept'
+    const isReady = data.isReady;
+    
+    let targetReadyArray = null;
+    let targetConnections = null;
+    let targetTeamObj = null;
+    let requiredCount = 1;
+    
+    if (g.mode === '3p') {
+      if (guessType === 'decrypt') {
+        targetReadyArray = g.decryptReady;
+        targetConnections = g.decryptConnections;
+        requiredCount = 1;
+      } else if (guessType === 'intercept') {
+        targetReadyArray = g.interceptReady;
+        targetConnections = g.interceptConnections;
+        requiredCount = 1;
+      }
+    } else {
+      const turnTeam = g.currentTeamTurn;
+      if (!turnTeam) return;
+      const opponentTeam = turnTeam === 'A' ? 'B' : 'A';
+      const playerTeam = this.getPlayerTeam(sender.id);
+      
+      if (guessType === 'decrypt' && playerTeam === turnTeam) {
+        targetReadyArray = g.teams[turnTeam].decryptReady;
+        targetConnections = g.teams[turnTeam].decryptConnections;
+        targetTeamObj = g.teams[turnTeam];
+      } else if (guessType === 'intercept' && playerTeam === opponentTeam) {
+        targetReadyArray = g.teams[opponentTeam].interceptReady;
+        targetConnections = g.teams[opponentTeam].interceptConnections;
+        targetTeamObj = g.teams[opponentTeam];
+      }
+      
+      if (targetTeamObj) {
+        const teamName = targetTeamObj === g.teams.A ? 'A' : 'B';
+        const activeMembers = this.players.filter(p => p.team === teamName).length;
+        if (teamName === turnTeam) {
+          requiredCount = Math.max(1, activeMembers - 1);
+        } else {
+          requiredCount = Math.max(1, activeMembers);
+        }
+      }
+    }
+    
+    if (!targetReadyArray) return;
+    
+    if (isReady && !targetReadyArray.includes(sender.id)) {
+      targetReadyArray.push(sender.id);
+    } else if (!isReady) {
+      const idx = targetReadyArray.indexOf(sender.id);
+      if (idx !== -1) targetReadyArray.splice(idx, 1);
+    }
+    
+    if (targetReadyArray.length >= requiredCount) {
+      this.handleSubmitGuess(sender, { guess: targetConnections, guessType });
+      return;
+    }
+    
+    this.broadcastState();
+  }
+
+
 
   // ── Resolve rounds ───────────────────────────────────────
 
@@ -687,6 +820,20 @@ export class DecryptoServer extends Server {
 
     if (!isCurrentEncryptor) {
       state.chat = g.chat;
+      state.decryptConnections = g.decryptConnections;
+      state.decryptReady = g.decryptReady;
+      state.interceptConnections = g.interceptConnections;
+      state.interceptReady = g.interceptReady;
+    }
+
+    // Calculate active guessers count for 3P
+    if (!isCurrentEncryptor) {
+      if (myRole === 'guesser') {
+        const otherEncryptorId = g.encryptors.find(id => id !== currentEncryptorId);
+        state.activeGuessersCount = (this.players.some(p => p.id === otherEncryptorId)) ? 1 : 1;
+      } else if (myRole === 'interceptor') {
+        state.activeGuessersCount = 1;
+      }
     }
 
     // Code: only current encryptor sees during ENCRYPT
@@ -737,8 +884,12 @@ export class DecryptoServer extends Server {
     const encryptorB = g.teams.B.playerIds[g.teams.B.encryptorIndex % g.teams.B.playerIds.length];
 
     let myRole = 'guesser';
-    if (myTeam === 'A' && viewerId === encryptorA) myRole = 'encryptor';
-    if (myTeam === 'B' && viewerId === encryptorB) myRole = 'encryptor';
+    if (myTeam === 'A' && viewerId === encryptorA) {
+      if (g.phase === 'ENCRYPT' || g.currentTeamTurn === 'A' || !g.currentTeamTurn) myRole = 'encryptor';
+    }
+    if (myTeam === 'B' && viewerId === encryptorB) {
+      if (g.phase === 'ENCRYPT' || g.currentTeamTurn === 'B' || !g.currentTeamTurn) myRole = 'encryptor';
+    }
 
     const state = {
       ...base,
@@ -776,6 +927,22 @@ export class DecryptoServer extends Server {
     // Code: only own team's encryptor sees during ENCRYPT
     if (g.phase === 'ENCRYPT' && myRole === 'encryptor') {
       state.code = g.teams[myTeam].code;
+    }
+
+    if (myTeam && myTeam !== 'none' && myRole !== 'encryptor') {
+      state.chat = g.teams[myTeam].chat;
+      state.decryptConnections = g.teams[myTeam].decryptConnections;
+      state.decryptReady = g.teams[myTeam].decryptReady;
+      state.interceptConnections = g.teams[myTeam].interceptConnections;
+      state.interceptReady = g.teams[myTeam].interceptReady;
+      
+      // Calculate active guessers count for this team
+      const onlineTeamMembers = this.players.filter(p => p.team === myTeam).length;
+      if (g.currentTeamTurn === myTeam || (!g.currentTeamTurn && myRole === 'encryptor')) {
+        state.activeGuessersCount = Math.max(1, onlineTeamMembers - 1);
+      } else {
+        state.activeGuessersCount = Math.max(1, onlineTeamMembers);
+      }
     }
 
     // Clues & guessing status during GUESS phases

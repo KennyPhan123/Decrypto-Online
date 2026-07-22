@@ -72,16 +72,22 @@ function send(data) {
 // ── Chat & Sync Handlers ────────────────────────────────────
 
 function updateChatUI() {
+  const s = state;
   const container = $('chat-container');
   const panel = $('chat-panel');
   const messagesEl = $('chat-messages');
   const badge = $('chat-badge');
+  const btnSend = $('chat-form').querySelector('button');
 
-  if (!state || !state.chat || state.myRole === 'encryptor') {
+  if (!s || s.phase === 'LOBBY' || s.myRole === 'encryptor' || (s.activeGuessersCount && s.activeGuessersCount < 2)) {
     container.style.display = 'none';
     return;
   }
   container.style.display = 'flex';
+  
+  if (btnSend) {
+    btnSend.textContent = (s.activeGuessersCount === 1) ? 'Gửi' : 'Gửi';
+  }
 
   const newMsgCount = state.chat.length;
   const currentCount = messagesEl.children.length;
@@ -137,11 +143,9 @@ function handleWireSync(data) {
     lastUpdate: Date.now()
   };
   
-  // Only trigger redraw if we are on the guessing phase and the wire container exists
-  if ($('wire-svg')) {
-    // Need to redraw lines, but from attachGuessHandlers updateLines function
-    // For simplicity, we can dispatch a custom event
-    document.dispatchEvent(new CustomEvent('redraw-wires'));
+  const taskContainer = document.getElementById('wire-task');
+  if (taskContainer) {
+    taskContainer.dispatchEvent(new CustomEvent('redraw-wires'));
   }
 }
 
@@ -158,8 +162,9 @@ setInterval(() => {
       changed = true;
     }
   }
-  if (changed && $('wire-svg')) {
-    document.dispatchEvent(new CustomEvent('redraw-wires'));
+  if (changed) {
+    const taskContainer = document.getElementById('wire-task');
+    if (taskContainer) taskContainer.dispatchEvent(new CustomEvent('redraw-wires'));
   }
 }, 1000);
 
@@ -413,14 +418,14 @@ function renderTokens() {
   } else {
     container.innerHTML = `
       <div class="token-group token-group-a">
-        <span class="token-team-label" style="color:var(--team-a)">A</span>
-        <span class="token-item"><span class="token-count token-label-i">${s.teamA.interceptions}</span>C</span>
-        <span class="token-item"><span class="token-count token-label-m">${s.teamA.miscommunications}</span>L</span>
+        <span class="token-team-label" style="color:var(--team-a)">ĐỘI A</span>
+        <span class="token-item" title="Chặn mã"><span class="token-count token-label-i">${s.teamA.interceptions}</span> Chặn</span>
+        <span class="token-item" title="Đoán sai"><span class="token-count token-label-m">${s.teamA.miscommunications}</span> Lỗi</span>
       </div>
       <div class="token-group token-group-b">
-        <span class="token-team-label" style="color:var(--team-b)">B</span>
-        <span class="token-item"><span class="token-count token-label-i">${s.teamB.interceptions}</span>C</span>
-        <span class="token-item"><span class="token-count token-label-m">${s.teamB.miscommunications}</span>L</span>
+        <span class="token-team-label" style="color:var(--team-b)">ĐỘI B</span>
+        <span class="token-item" title="Chặn mã"><span class="token-count token-label-i">${s.teamB.interceptions}</span> Chặn</span>
+        <span class="token-item" title="Đoán sai"><span class="token-count token-label-m">${s.teamB.miscommunications}</span> Lỗi</span>
       </div>
     `;
   }
@@ -505,6 +510,9 @@ function renderActionArea() {
   }
 
   if (window.currentActionState === viewState) {
+    if (s.phase.startsWith('GUESS')) {
+      renderGuessPhase(area);
+    }
     return;
   }
   window.currentActionState = viewState;
@@ -604,6 +612,7 @@ function renderEncryptPhase(area) {
         <p>${waitText}<span class="waiting-dots"></span></p>
       </div>
     `;
+    area.dataset.renderedPhase = '';
   }
 }
 
@@ -613,6 +622,16 @@ function renderGuessPhase(area) {
   const s = state;
   const clues = s.currentClues || s.clues;
   if (!clues) return;
+
+  const guessType = (s.myRole === 'interceptor' || (s.mode === 'team' && s.myTeam !== s.currentTeamTurn)) ? 'intercept' : 'decrypt';
+  
+  const phaseKey = s.phase + '_' + guessType;
+  if (area.dataset.renderedPhase === phaseKey) {
+    const taskContainer = document.getElementById('wire-task');
+    if (taskContainer) taskContainer.dispatchEvent(new CustomEvent('sync-wires'));
+    return;
+  }
+  area.dataset.renderedPhase = phaseKey;
 
   let html = '';
 
@@ -690,7 +709,7 @@ function renderGuessTeam(clues) {
       html += renderCluesOnly(clues);
       html += `<div class="guess-submitted">Đội bạn đã gửi dự đoán. Đang chờ đội ${oppTeam}<span class="waiting-dots"></span></div>`;
     } else {
-      html += renderGuessForm('decrypt', 'Giải mã', clues, teamData.keywords);
+      html += renderGuessForm('decrypt', 'Giải mã', clues, s.keywords);
     }
   } else {
     if (s.round < 2) {
@@ -733,7 +752,7 @@ function renderGuessForm(guessType, title, clues, keywords) {
           `).join('')}
         </div>
       </div>
-      <button class="btn btn-primary" id="btn-submit-guess" data-type="${guessType}" disabled style="width:100%">Gửi</button>
+      <button class="btn btn-primary" id="btn-submit-guess" data-type="${guessType}" style="width:100%">Sẵn sàng (0/1)</button>
     </div>
   `;
 }
@@ -748,13 +767,26 @@ function attachGuessHandlers() {
 
   const leftNodes = document.querySelectorAll('.left-node');
   const rightNodes = document.querySelectorAll('.right-node');
+  const guessType = btn.dataset.type;
   
-  const connections = { 0: null, 1: null, 2: null };
   let activeStartNode = null;
   let activeLine = null;
+  
+  function getConnections() {
+    if (guessType === 'decrypt') return state.decryptConnections || [null, null, null];
+    return state.interceptConnections || [null, null, null];
+  }
+  
+  function getReadyPlayers() {
+    if (guessType === 'decrypt') return state.decryptReady || [];
+    return state.interceptReady || [];
+  }
 
-  function broadcastWireSync() {
+  function broadcastWireSync(overrideConnections = null) {
     const cRect = container.getBoundingClientRect();
+    const connections = overrideConnections || getConnections();
+    
+    // Ghost sync still used for active line tracking
     const syncData = {
       connections,
       activeLine: activeLine ? {
@@ -784,6 +816,8 @@ function attachGuessHandlers() {
     }
 
     const KW_BG = ['var(--kw-1-bg)', 'var(--kw-2-bg)', 'var(--kw-3-bg)', 'var(--kw-4-bg)'];
+
+    const connections = getConnections();
 
     // Draw connected lines
     rightNodes.forEach(rn => {
@@ -838,30 +872,8 @@ function attachGuessHandlers() {
       const gConns = g.syncData.connections;
       const gActive = g.syncData.activeLine;
       
-      // Draw connected ghost lines
-      for (let i = 0; i < 3; i++) {
-        const num = gConns[i];
-        if (num) {
-          const lNode = leftNodes[i];
-          const rNode = Array.from(rightNodes).find(n => parseInt(n.dataset.val) === num);
-          if (lNode && rNode) {
-            const lRect = lNode.getBoundingClientRect();
-            const rRect = rNode.getBoundingClientRect();
-            
-            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', lRect.right - cRect.left);
-            line.setAttribute('y1', lRect.top + lRect.height/2 - cRect.top);
-            line.setAttribute('x2', rRect.left - cRect.left);
-            line.setAttribute('y2', rRect.top + rRect.height/2 - cRect.top);
-            line.setAttribute('stroke', rNode.style.color);
-            line.setAttribute('stroke-width', '4');
-            line.setAttribute('class', 'ghost-wire');
-            svg.appendChild(line);
-          }
-        }
-      }
-      
-      // Draw active ghost line
+      // We don't draw connected ghost lines anymore because it's shared board!
+      // But we still draw the active dragging line for ghosts
       if (gActive && gActive.clueIdx !== null) {
         const lNode = leftNodes[gActive.clueIdx];
         if (lNode) {
@@ -889,17 +901,65 @@ function attachGuessHandlers() {
       }
     }
     
-    btn.disabled = !(connections[0] && connections[1] && connections[2]);
+    // Update Ready Button
+    const readyArr = getReadyPlayers();
+    const isReady = readyArr.includes(state.myId);
+    const activeCount = state.activeGuessersCount || 1;
+    
+    if (activeCount === 1) {
+      btn.textContent = 'Gửi';
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+    } else {
+      btn.textContent = isReady 
+        ? `Đã sẵn sàng (${readyArr.length}/${activeCount}) - Bấm để hủy` 
+        : `Sẵn sàng (${readyArr.length}/${activeCount})`;
+        
+      if (isReady) {
+        btn.classList.add('btn-secondary');
+        btn.classList.remove('btn-primary');
+        container.style.opacity = '0.6';
+        container.style.pointerEvents = 'none'; // Lock board for this user
+      } else {
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+        container.style.opacity = '1';
+        container.style.pointerEvents = 'auto';
+      }
+    }
+
+    const allConnected = connections[0] && connections[1] && connections[2];
+    btn.disabled = !allConnected && !isReady;
   }
 
-  document.addEventListener('redraw-wires', updateLines);
+  // Remove old listeners to prevent duplicates if any
+  container.removeEventListener('redraw-wires', updateLines);
+  container.removeEventListener('sync-wires', updateLines);
+  
+  container.addEventListener('redraw-wires', updateLines);
+  container.addEventListener('sync-wires', updateLines);
+
+  btn.addEventListener('click', () => {
+    const isReady = getReadyPlayers().includes(state.myId);
+    send({ type: 'toggle-ready', guessType, isReady: !isReady });
+  });
 
   container.addEventListener('pointerdown', e => {
     const node = e.target.closest('.left-node');
     if (!node) return;
     
     const clueIdx = parseInt(node.dataset.clue);
-    connections[clueIdx] = null; // disconnect
+    const newConnections = [...getConnections()];
+    newConnections[clueIdx] = null; // disconnect locally for dragging
+    
+    // Optimistically update local state
+    if (guessType === 'decrypt') state.decryptConnections = newConnections;
+    else state.interceptConnections = newConnections;
+    
+    // Send immediate update so others see it disconnected
+    send({ type: 'update-connections', guessType, connections: newConnections });
     
     activeStartNode = node;
     const cRect = container.getBoundingClientRect();
@@ -941,13 +1001,20 @@ function attachGuessHandlers() {
     if (rightNode) {
       const clueIdx = parseInt(activeStartNode.dataset.clue);
       const val = parseInt(rightNode.dataset.val);
+      const newConnections = [...getConnections()];
       
       // Disconnect other wires connected to this target
-      for (let k in connections) {
-        if (connections[k] === val) connections[k] = null;
+      for (let k = 0; k < 3; k++) {
+        if (newConnections[k] === val) newConnections[k] = null;
       }
       
-      connections[clueIdx] = val;
+      newConnections[clueIdx] = val;
+      
+      // Optimistically update local state
+      if (guessType === 'decrypt') state.decryptConnections = newConnections;
+      else state.interceptConnections = newConnections;
+      
+      send({ type: 'update-connections', guessType, connections: newConnections });
     }
     
     activeStartNode = null;
@@ -1016,16 +1083,6 @@ function attachGuessHandlers() {
 
   window.addEventListener('resize', updateLines);
   setTimeout(updateLines, 50);
-
-  btn.addEventListener('click', () => {
-    if (!connections[0] || !connections[1] || !connections[2]) return;
-    const guess = [connections[0], connections[1], connections[2]];
-    const guessType = btn.dataset.type;
-
-    send({ type: 'submit-guess', guess, guessType });
-    btn.disabled = true;
-    btn.textContent = 'Đã gửi';
-  });
 }
 
 // ── Reveal Phase ────────────────────────────────────────────
